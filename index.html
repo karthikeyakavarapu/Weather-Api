@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Karthik's Weather Pulse & AI Assistant</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/framer-motion@10.16.4/dist/framer-motion.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            background: #020617;
+            color: white;
+            overflow-x: hidden;
+        }
+        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .gradient-text { background: linear-gradient(to right, #60a5fa, #a855f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+        const { motion, AnimatePresence } = window.Motion;
+
+        const App = () => {
+            const [weather, setWeather] = useState(null);
+            const [city, setCity] = useState("Detecting...");
+            const [search, setSearch] = useState("");
+            const [loading, setLoading] = useState(true);
+            const [aiMessage, setAiMessage] = useState("");
+
+            // --- Core Logic: Fetch Weather ---
+            const fetchWeather = async (lat, lon, name) => {
+                setLoading(true);
+                try {
+                    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m,uv_index,surface_pressure&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset&timezone=auto`;
+                    const res = await fetch(url);
+                    const data = await res.json();
+                    setWeather(data);
+                    setCity(name);
+                    generateAiInsight(data);
+                } catch (err) {
+                    console.error("Fetch error", err);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            // --- AI Prediction Bot (Karthik-AI) ---
+            const generateAiInsight = (data) => {
+                const temp = data.current.temperature_2m;
+                const code = data.current.weather_code;
+                let insight = "";
+
+                if (code > 50) insight = "I predict heavy rain in the next 4 hours. If you're planning an event, move it indoors. The future looks wet!";
+                else if (temp > 30) insight = "A heatwave is trending. Looking 2 days ahead, hydration is your best friend. Maybe avoid outdoor 'hatching' plans between 12-4 PM.";
+                else if (temp < 10) insight = "Chilly vibes ahead. My sensors suggest a drop in temperature tomorrow morning. Perfect time for hot coffee and indoor work.";
+                else insight = "Perfect conditions detected. The next 48 hours are ideal for travel. My future analysis shows clear skies for your weekend hatch!";
+                
+                setAiMessage(insight);
+            };
+
+            // --- Geolocation ---
+            useEffect(() => {
+                navigator.geolocation.getCurrentPosition(
+                    (p) => fetchWeather(p.coords.latitude, p.coords.longitude, "Your Location"),
+                    () => fetchWeather(51.5, -0.12, "London, UK")
+                );
+            }, []);
+
+            useEffect(() => { if (!loading) lucide.createIcons(); }, [loading, weather]);
+
+            const getWeatherIcon = (code) => {
+                if (code === 0) return "sun";
+                if (code <= 3) return "cloud-sun";
+                if (code <= 67) return "cloud-rain";
+                return "cloud-lightning";
+            };
+
+            if (loading) return (
+                <div className="h-screen flex items-center justify-center bg-slate-950">
+                    <div className="text-center">
+                        <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                        <h2 className="text-xl font-bold animate-pulse">Initializing Karthik's Weather Hub...</h2>
+                    </div>
+                </div>
+            );
+
+            return (
+                <div className="min-h-screen pb-20 px-4 md:px-10">
+                    {/* Header */}
+                    <nav className="max-w-7xl mx-auto py-8 flex flex-col md:flex-row justify-between items-center gap-6">
+                        <div className="text-center md:text-left">
+                            <h1 className="text-3xl font-black tracking-tighter uppercase leading-none">Karthik<span className="text-blue-500">Pulse</span></h1>
+                            <span className="text-[10px] text-slate-500 font-bold tracking-[0.3em] uppercase">Future Intelligence v2.0</span>
+                        </div>
+                        
+                        <div className="flex gap-4 w-full md:w-auto">
+                            <div className="relative flex-1 md:w-80">
+                                <i data-lucide="search" className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500"></i>
+                                <input 
+                                    className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 pl-12 pr-4 outline-none focus:ring-2 focus:ring-blue-500 transition"
+                                    placeholder="Jump to a new place..."
+                                    onKeyDown={async (e) => {
+                                        if(e.key === 'Enter') {
+                                            const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${e.target.value}&count=1`);
+                                            const d = await r.json();
+                                            if(d.results) fetchWeather(d.results[0].latitude, d.results[0].longitude, d.results[0].name);
+                                        }
+                                    }}
+                                />
+                            </div>
+                        </div>
+                    </nav>
+
+                    <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
+                        
+                        {/* LEFT: Current & Hourly Slide */}
+                        <div className="lg:col-span-8 space-y-8">
+                            
+                            {/* Main Hero Card */}
+                            <div className="glass rounded-[3rem] p-10 relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 p-10 opacity-20 group-hover:opacity-40 transition duration-700">
+                                    <i data-lucide={getWeatherIcon(weather.current.weather_code)} className="w-40 h-40"></i>
+                                </div>
+                                
+                                <div className="relative z-10">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <i data-lucide="map-pin" className="w-4 h-4 text-blue-500"></i>
+                                        <h2 className="text-2xl font-bold">{city}</h2>
+                                    </div>
+                                    <p className="text-slate-400 mb-8">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+                                    
+                                    <div className="flex items-baseline gap-4 mb-10">
+                                        <span className="text-9xl font-black tracking-tighter leading-none">{Math.round(weather.current.temperature_2m)}°</span>
+                                        <div className="text-slate-400">
+                                            <p className="text-2xl font-semibold leading-none mb-1">Celsius</p>
+                                            <p className="text-sm">Feels like {Math.round(weather.current.apparent_temperature)}°</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                        <div className="bg-white/5 p-4 rounded-3xl border border-white/5">
+                                            <p className="text-xs text-slate-500 mb-1">Humidity</p>
+                                            <p className="text-lg font-bold">{weather.current.relative_humidity_2m}%</p>
+                                        </div>
+                                        <div className="bg-white/5 p-4 rounded-3xl border border-white/5">
+                                            <p className="text-xs text-slate-500 mb-1">Wind Speed</p>
+                                            <p className="text-lg font-bold">{weather.current.wind_speed_10m} km/h</p>
+                                        </div>
+                                        <div className="bg-white/5 p-4 rounded-3xl border border-white/5">
+                                            <p className="text-xs text-slate-500 mb-1">Pressure</p>
+                                            <p className="text-lg font-bold">{weather.current.surface_pressure} hPa</p>
+                                        </div>
+                                        <div className="bg-white/5 p-4 rounded-3xl border border-white/5">
+                                            <p className="text-xs text-slate-500 mb-1">UV Index</p>
+                                            <p className="text-lg font-bold">{weather.current.uv_index}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Hourly Forecast Slide */}
+                            <div className="space-y-4">
+                                <h3 className="text-xl font-bold px-2">Next 24 Hours</h3>
+                                <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
+                                    {weather.hourly.time.slice(0, 24).map((time, i) => (
+                                        <div key={time} className="glass min-w-[100px] p-6 rounded-[2rem] text-center hover:bg-white/10 transition cursor-pointer">
+                                            <p className="text-xs text-slate-500 mb-3">{new Date(time).getHours()}:00</p>
+                                            <i data-lucide={getWeatherIcon(weather.hourly.weather_code[i])} className="w-6 h-6 mx-auto mb-3 text-blue-400"></i>
+                                            <p className="font-bold text-lg">{Math.round(weather.hourly.temperature_2m[i])}°</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Hatch Immediately - Planning Hub */}
+                            <div className="grid md:grid-cols-2 gap-6">
+                                <div className="bg-indigo-600 rounded-[2.5rem] p-8 relative overflow-hidden group">
+                                    <div className="relative z-10">
+                                        <h4 className="text-xl font-black mb-2 uppercase tracking-tight">Hatch & Plan</h4>
+                                        <p className="text-indigo-100 text-sm mb-6">Immediate outdoor activity index is 8.5/10. Great for photography.</p>
+                                        <button className="bg-white text-indigo-600 px-6 py-2 rounded-full text-xs font-bold uppercase hover:bg-indigo-50 transition">Check Local Parks</button>
+                                    </div>
+                                    <i data-lucide="compass" className="absolute -bottom-4 -right-4 w-32 h-32 opacity-10 group-hover:rotate-45 transition duration-1000"></i>
+                                </div>
+                                <div className="bg-orange-500 rounded-[2.5rem] p-8 relative overflow-hidden group">
+                                    <div className="relative z-10">
+                                        <h4 className="text-xl font-black mb-2 uppercase tracking-tight">Sunrise/Sunset</h4>
+                                        <div className="flex justify-between items-end mt-4">
+                                            <div><p className="text-[10px] uppercase opacity-80">Rise</p><p className="font-bold">{weather.daily.sunrise[0].split('T')[1]}</p></div>
+                                            <i data-lucide="sun" className="w-8 h-8"></i>
+                                            <div><p className="text-[10px] uppercase opacity-80 text-right">Set</p><p className="font-bold">{weather.daily.sunset[0].split('T')[1]}</p></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* RIGHT: AI & Forecast */}
+                        <div className="lg:col-span-4 space-y-8">
+                            
+                            {/* Karthik-AI Bot */}
+                            <div className="glass rounded-[2.5rem] p-8 border-l-4 border-l-blue-500">
+                                <div className="flex items-center gap-3 mb-6">
+                                    <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+                                        <i data-lucide="bot" className="w-5 h-5"></i>
+                                    </div>
+                                    <div>
+                                        <p className="font-bold leading-none">Karthik-AI</p>
+                                        <span className="text-[10px] text-blue-400 uppercase font-bold">Future Strategist</span>
+                                    </div>
+                                </div>
+                                <div className="bg-white/5 p-6 rounded-3xl relative">
+                                    <p className="text-sm leading-relaxed text-slate-200">"{aiMessage}"</p>
+                                    <div className="absolute -top-2 left-6 w-4 h-4 bg-white/5 rotate-45 border-l border-t border-white/10"></div>
+                                </div>
+                            </div>
+
+                            {/* 7 Day Forecast */}
+                            <div className="space-y-4">
+                                <h3 className="text-xl font-bold px-2">Next 7 Days</h3>
+                                <div className="space-y-3">
+                                    {weather.daily.time.map((day, i) => (
+                                        <div key={day} className="glass px-6 py-4 rounded-3xl flex items-center justify-between hover:bg-white/5 transition">
+                                            <p className="w-12 font-bold text-slate-500">{i === 0 ? "Today" : new Date(day).toLocaleDateString('en-US', { weekday: 'short' })}</p>
+                                            <div className="flex items-center gap-3">
+                                                <i data-lucide={getWeatherIcon(weather.daily.weather_code[i])} className="w-5 h-5 text-blue-400"></i>
+                                                <span className="text-sm text-slate-300">Mostly Clear</span>
+                                            </div>
+                                            <div className="flex gap-4 font-bold">
+                                                <span>{Math.round(weather.daily.temperature_2m_max[i])}°</span>
+                                                <span className="text-slate-600">{Math.round(weather.daily.temperature_2m_min[i])}°</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <footer className="max-w-7xl mx-auto mt-20 pt-10 border-t border-white/5 flex flex-col md:flex-row justify-between items-center text-slate-500 text-xs gap-4">
+                        <p>© 2024 Powered by <span className="text-white font-bold">Karthik's Weather Engine</span></p>
+                        <div className="flex gap-6">
+                            <a href="#" className="hover:text-white">Real-time Data</a>
+                            <a href="#" className="hover:text-white">Future Predictions</a>
+                            <a href="#" className="hover:text-white">Climate Insights</a>
+                        </div>
+                    </footer>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
